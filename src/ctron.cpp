@@ -240,7 +240,7 @@ void Field::render() {
 		// Render all of the walls.
 		for (auto wallPos : tron->walls) {
 			if (wallPos != pos) {
-				mvaddch(wallPos.second, wallPos.first, '+');
+				mvaddch(wallPos.second, wallPos.first, 'o');
 			}	
 		}
 	}
@@ -351,7 +351,7 @@ int main(int argc, char *argv[]) {
 	Timer timer;
 	
 	// Do an initial field render and wait 3 seconds.
-	clear();
+	erase();
 	field.render();
 	refresh();
 	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
@@ -364,7 +364,7 @@ int main(int argc, char *argv[]) {
  		field.move();
 		
 		// Render.
-		clear();
+		erase();
 		field.render();
 		refresh();
 		
