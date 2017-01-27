@@ -142,7 +142,7 @@ class Field {
 		~Field();
 		void addTron(Tron* tron);
 		void setupField();
-		void getTron(int index);
+		Tron* getTron(int index);
 		int getNumAlive();
 	private:
 		int minX;
@@ -181,7 +181,7 @@ void Field::addTron(Tron* tron) {
 	this->trons.push_back(tron);
 }
 
-void Field::getTron(int index) {
+Tron* Field::getTron(int index) {
 	return this->trons[index];
 }
 
