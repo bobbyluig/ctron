@@ -59,12 +59,17 @@ class Tron {
 		Tron(int color);
 		
 		void setPosition(double x, double y);
+		Coordinate getPosition();
+		
 		void setDirection(Direction direction);
+		Direction getDirection();
 		
 		void move(double units);
 		
-		Coordinate getPosition();
 		int getColor();
+		
+		bool isAlive();
+		void kill();
 	private:
 		int color;
 		
@@ -79,6 +84,18 @@ class Tron {
 Tron::Tron(int color) {
 	this->color = color;
 	this->alive = true;
+}
+
+Direction Tron::getDirection() {
+	return this->direction;
+}
+
+bool Tron::isAlive() {
+	return this->alive;
+}
+
+void Tron::kill() {
+	this->alive = false;
 }
 
 void Tron::setPosition(double x, double y) {
@@ -126,6 +143,7 @@ class Field {
 		void addTron(Tron* tron);
 		void setupField();
 		void getTron(int index);
+		int getNumAlive();
 	private:
 		int minX;
 		int minY;
@@ -145,6 +163,18 @@ Field::~Field() {
 	for (auto tron : this->trons) {
 		delete tron;
 	}
+}
+
+int Field::getNumAlive() {
+	int count = 0;
+	
+	for (auto tron : this->trons) {
+		if (tron->isAlive()) {
+			count += 1;
+		}
+	}
+	
+	return count;
 }
 
 void Field::addTron(Tron* tron) {
@@ -207,6 +237,9 @@ int main(int argc, char *argv[]) {
 	
 	// Setup the field.
 	field.setupField();
+	
+	// Create timer object.
+	Timer timer;
 	
 	while (1) {
 		clear();
