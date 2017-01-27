@@ -56,7 +56,7 @@ double Timer::split() {
 
 class Tron {
 	public:
-		Tron(int color);
+		Tron(int color, bool isHuman);
 		
 		void setPosition(double x, double y);
 		Coordinate getPosition();
@@ -67,11 +67,13 @@ class Tron {
 		void move(double units);
 		
 		int getColor();
+		bool getHuman();
 		
 		bool isAlive();
 		void kill();
 	private:
 		int color;
+		bool isHuman;
 		
 		double posX;
 		double posY;
@@ -81,13 +83,18 @@ class Tron {
 		std::set<Coordinate> walls;
 };
 
-Tron::Tron(int color) {
+Tron::Tron(int color, bool isHuman) {
 	this->color = color;
+	this->isHuman = isHuman;
 	this->alive = true;
 }
 
 Direction Tron::getDirection() {
 	return this->direction;
+}
+
+bool Tron::getHuman() {
+	return this->isHuman;
 }
 
 bool Tron::isAlive() {
@@ -227,11 +234,11 @@ int main(int argc, char *argv[]) {
 	Field field(0, 0, cols, rows);
 	
 	// Create all Trons and add them to the field.
-	Tron* player = new Tron(COLOR_CYAN);
+	Tron* player = new Tron(COLOR_CYAN, true);
 	field.addTron(player);
 	
 	for (int i = 0; i < numAI; i++) {
-		Tron* ai = new Tron(COLOR_YELLOW);
+		Tron* ai = new Tron(COLOR_YELLOW, false);
 		field.addTron(ai);
 	}
 	
