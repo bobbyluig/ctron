@@ -1,5 +1,5 @@
 #include <curses.h>
-#include <unistd.h>
+#include <thread>
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
@@ -8,11 +8,12 @@
 #include <iostream>
 #include <random>
 #include <iterator>
+#include <map>
 
-#define DELAY 35000
-#define FPS 60
+#define VEL 10.0000
 
-typedef std::pair<double, double> Coordinate;
+typedef std::pair<int, int> Coordinate;
+class Field;
 
 
 enum Direction {
@@ -28,6 +29,7 @@ class Timer {
 		Timer();
 		void start();
 		double split();
+		bool isStarted();
 	private:
 		std::chrono::high_resolution_clock::time_point t;
 		bool started;
@@ -43,49 +45,50 @@ void Timer::start() {
 }
 
 double Timer::split() {
-	if (!this->started) {
-		return -1;
-	}
-	
 	auto now = std::chrono::high_resolution_clock::now();
-	auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(now - this->t);
+	auto duration = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(now - this->t);
 	
 	return duration.count();
+}
+
+bool Timer::isStarted() {
+	return this->started;
 }
 
 
 class Tron {
 	public:
-		Tron(int color, bool isHuman);
+		Tron(int color, bool human);
 		
-		void setPosition(double x, double y);
+		void setPosition(int x, int y);
 		Coordinate getPosition();
 		
 		void setDirection(Direction direction);
 		Direction getDirection();
 		
-		void move(double units);
+		void move();
+		void think(Field* field);
 		
 		int getColor();
-		bool getHuman();
+		bool isHuman();
 		
 		bool isAlive();
 		void kill();
-	private:
-		int color;
-		bool isHuman;
-		
-		double posX;
-		double posY;
-		Direction direction;
-		bool alive;
 		
 		std::set<Coordinate> walls;
+	private:
+		int color;
+		bool human;
+		
+		int posX;
+		int posY;
+		Direction direction;
+		bool alive;
 };
 
-Tron::Tron(int color, bool isHuman) {
+Tron::Tron(int color, bool human) {
 	this->color = color;
-	this->isHuman = isHuman;
+	this->human = human;
 	this->alive = true;
 }
 
@@ -93,8 +96,12 @@ Direction Tron::getDirection() {
 	return this->direction;
 }
 
-bool Tron::getHuman() {
-	return this->isHuman;
+void Tron::think(Field* field) {
+	
+}
+
+bool Tron::isHuman() {
+	return this->human;
 }
 
 bool Tron::isAlive() {
@@ -105,7 +112,7 @@ void Tron::kill() {
 	this->alive = false;
 }
 
-void Tron::setPosition(double x, double y) {
+void Tron::setPosition(int x, int y) {
 	this->posX = x;
 	this->posY = y;
 }
@@ -114,22 +121,22 @@ void Tron::setDirection(Direction direction) {
 	this->direction = direction;
 }
 
-void Tron::move(double amount) {
+void Tron::move() {
 	Coordinate pos = this->getPosition();
 	this->walls.insert(pos);
 	
 	switch(this->direction) {
 	case Direction::LEFT:
-		this->posX -= amount;
+		this->posX -= 1;
 		break;
 	case Direction::RIGHT:
-		this->posX += amount;
+		this->posX += 1;
 		break;
 	case Direction::UP:
-		this->posY += amount;
+		this->posY -= 1;
 		break;
 	case Direction::DOWN:
-		this->posY -= amount;
+		this->posY += 1;
 		break;
 	}
 }
@@ -147,9 +154,14 @@ class Field {
 	public:
 		Field(int minX, int minY, int maxX, int maxY);
 		~Field();
+		
 		void addTron(Tron* tron);
-		void setupField();
 		Tron* getTron(int index);
+		
+		void setupField();
+		void move();
+		void render();
+		
 		int getNumAlive();
 	private:
 		int minX;
@@ -157,6 +169,8 @@ class Field {
 		int maxX;
 		int maxY;
 		std::vector<Tron*> trons;
+		
+		bool isColliding(Tron* tron);
 };
 
 Field::Field(int minX, int minY, int maxX, int maxY) {
@@ -169,6 +183,66 @@ Field::Field(int minX, int minY, int maxX, int maxY) {
 Field::~Field() {
 	for (auto tron : this->trons) {
 		delete tron;
+	}
+}
+
+void Field::move() {
+	for (auto tron : this->trons) {
+		if (!tron->isHuman()) {
+			tron->think(this);
+		}
+		
+		// Get user input.
+		switch (getch()) {
+			case KEY_UP:
+				tron->setDirection(Direction::UP);
+				break;
+			case KEY_DOWN:
+				tron->setDirection(Direction::DOWN);
+				break;
+			case KEY_LEFT:
+				tron->setDirection(Direction::LEFT);
+				break;
+			case KEY_RIGHT:
+				tron->setDirection(Direction::RIGHT);
+				break;
+		}
+
+		tron->move();
+	}
+}
+
+void Field::render() {
+	for (int i = 0; i < this->trons.size(); i++) {
+		// Get the tron and position.
+		Tron* tron = this->trons[i];
+		Coordinate pos = tron->getPosition();
+		
+		// Set the color.
+		attron(COLOR_PAIR(i + 1));
+		
+		// Render the tron.
+		switch (tron->getDirection()) {
+		case Direction::RIGHT:
+			mvaddch(pos.second, pos.first, '>');
+			break;
+		case Direction::LEFT:
+			mvaddch(pos.second, pos.first, '<');
+			break;
+		case Direction::UP:
+			mvaddch(pos.second, pos.first, '^');
+			break;
+		case Direction::DOWN:
+			mvaddch(pos.second, pos.first, 'v');
+			break;
+		}
+		
+		// Render all of the walls.
+		for (auto wallPos : tron->walls) {
+			if (wallPos != pos) {
+				mvaddch(wallPos.second, wallPos.first, '+');
+			}	
+		}
 	}
 }
 
@@ -197,7 +271,28 @@ void Field::setupField() {
 	int height = this->maxY - this->minY;
 	
 	for (int i = 0; i < this->trons.size(); i++) {
-		init_pair(i + 1, this->trons[i]->getColor(), COLOR_BLACK);
+		Tron* tron = this->trons[i];
+		init_pair(i + 1, tron->getColor(), COLOR_BLACK);
+		
+		switch (i) {
+		case 0:
+			tron->setDirection(Direction::RIGHT);
+			tron->setPosition(this->minX, this->maxY);
+			break;
+		case 1:
+			tron->setDirection(Direction::LEFT);
+			tron->setPosition(this->maxX, this->minX);
+			break;
+		case 2:
+			tron->setDirection(Direction::RIGHT);
+			tron->setPosition(this->minX, this->minY);
+			break;
+		case 3:
+			tron->setDirection(Direction::LEFT);
+			tron->setPosition(this->maxX, this->maxY);
+			break;
+		}
+		
 	}
 }
 
@@ -219,41 +314,66 @@ int main(int argc, char *argv[]) {
 		std::cerr << "The maximum number of AI players is 3." << std::endl;
 		return 1;
 	}
-	
+
 	// Initialize ncurses.
 	initscr();
 	start_color();
-	noecho();
 	curs_set(FALSE);
+	
+	// Setup proper keyboard input.
+	cbreak();
+	noecho();
+	nodelay(stdscr, TRUE);
+	keypad(stdscr, TRUE);
 	
 	// Get screen size.
 	int rows, cols;
 	getmaxyx(stdscr, rows, cols);
 	
 	// Create field.
-	Field field(0, 0, cols, rows);
+	Field field(0, 0, cols - 1, rows - 1);
 	
-	// Create all Trons and add them to the field.
+	// Create all trons and add them to the field.
 	Tron* player = new Tron(COLOR_CYAN, true);
 	field.addTron(player);
 	
+	/*
 	for (int i = 0; i < numAI; i++) {
 		Tron* ai = new Tron(COLOR_YELLOW, false);
 		field.addTron(ai);
 	}
+	*/
 	
 	// Setup the field.
 	field.setupField();
-	
+		
 	// Create timer object.
 	Timer timer;
 	
+	// Do an initial field render and wait 3 seconds.
+	clear();
+	field.render();
+	refresh();
+	std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+	
 	while (1) {
+		// (Re)start timer.
+		timer.start();
+		
+		// Move.
+ 		field.move();
+		
+		// Render.
 		clear();
-		// attron(COLOR_PAIR(1));
-		mvprintw(0, 0, "(%d, %d)", cols, rows);
+		field.render();
 		refresh();
-		usleep(DELAY);
+		
+		// Sleep to maintain velocity.
+		int remaining = std::round((1 / VEL) * 1000 - timer.split());
+		
+		if (remaining > 0) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(remaining));
+		}	
 	}
 	
 	return 0;
