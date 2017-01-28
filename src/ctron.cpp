@@ -194,13 +194,6 @@ Field::Field(int minX, int minY, int maxX, int maxY) {
 	this->minY = minY;
 	this->maxX = maxX;
 	this->maxY = maxY;
-	
-	// Build initial map.
-	for (int x = this->minX; x < this->maxX; x++) {
-		for (int y = this->minY; y < this->maxY; y++) {
-			this->map[std::make_pair(x, y)] = Block::EMPTY;
-		}
-	}
 }
 
 Field::~Field() {
@@ -211,7 +204,16 @@ Field::~Field() {
 
 bool Field::isColliding(Tron* tron) {
 	Coordinate pos = tron->getPosition();
-	return 	(this->map[pos] != Block::EMPTY) || 
+	
+	int tronsInPos = 0;
+	
+	for (auto t : this->trons) {
+		if (t->isAlive() && t->getPosition() == pos) {
+			tronsInPos += 1;
+		}
+	}
+	
+	return 	(this->map[pos] == Block::WALL) || (tronsInPos > 1) || 
 			(pos.first < this->minX) || (pos.first > this->maxX) ||
 			(pos.second < this->minY) || (pos.second > this->maxY);
 }
@@ -222,13 +224,21 @@ int Field::getOptimalWalls() {
 }
 
 void Field::updateMap() {
-	for (auto const& coordinate : this->map) {
-		this->map[coordinate.first] = Block::EMPTY;
+	for (int x = this->minX; x <= this->maxX; x++) {
+		for (int y = this->minY; y <= this->maxY; y++) {
+			this->map[std::make_pair(x, y)] = Block::EMPTY;
+		}
 	}
 	
 	for (auto tron : this->trons) {
-		Coordinate pos = tron->getPosition();
-		this->map[pos] = Block::TRON; 
+		if (!tron->isAlive()) {
+			continue;
+		}
+		
+		Coordinate pos = tron->getPosition(); 
+		if (this->map[pos] == Block::EMPTY) {
+			this->map[pos] = Block::TRON; 
+		}
 		
 		for (auto wallPos : tron->walls) {
 			this->map[wallPos] = Block::WALL;
@@ -243,11 +253,12 @@ void Field::move() {
 		}
 		
 		if (!tron->isHuman()) {
+			// Think!
 			tron->think(this);
 		}
-		
-		// Get user input.
-		switch (getch()) {
+		else {
+			// Get user input.
+			switch (getch()) {
 			case KEY_UP:
 				tron->setDirection(Direction::UP);
 				break;
@@ -260,24 +271,31 @@ void Field::move() {
 			case KEY_RIGHT:
 				tron->setDirection(Direction::RIGHT);
 				break;
+			}
 		}
 
 		tron->move();
 	}
 	
+	// Update field map.
+	this->updateMap();
+	
 	// Did anyone get wrecked?
+	std::vector<Tron*> deadTrons;
+	
 	for (auto tron : this->trons) {
 		if (!tron->isAlive()) {
 			continue;
 		}
 		
 		if (this->isColliding(tron)) {
-			tron->kill();
+			deadTrons.push_back(tron);
 		}
 	}
 	
-	// Update field map.
-	this->updateMap();
+	for (auto tron : deadTrons) {
+		tron->kill();
+	}
 }
 
 void Field::render() {
@@ -366,9 +384,11 @@ void Field::setupField() {
 			tron->setDirection(Direction::LEFT);
 			tron->setPosition(this->maxX, this->maxY);
 			break;
-		}
-		
+		}	
 	}
+	
+	// Build initial map.
+	this->updateMap();
 }
 
 
