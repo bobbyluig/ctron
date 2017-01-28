@@ -23,6 +23,12 @@ enum Direction {
 	DOWN
 };
 
+enum Block {
+	EMPTY,
+	WALL,
+	TRON
+};
+
 
 class Timer {
 	public:
@@ -170,6 +176,7 @@ class Field {
 		void render();
 		
 		int getNumAlive();
+		int getOptimalWalls();
 	private:
 		int minX;
 		int minY;
@@ -177,6 +184,8 @@ class Field {
 		int maxY;
 		std::vector<Tron*> trons;
 		
+		std::map<Coordinate, Block> map;
+		void updateMap();
 		bool isColliding(Tron* tron);
 };
 
@@ -185,6 +194,13 @@ Field::Field(int minX, int minY, int maxX, int maxY) {
 	this->minY = minY;
 	this->maxX = maxX;
 	this->maxY = maxY;
+	
+	// Build initial map.
+	for (int x = this->minX; x < this->maxX; x++) {
+		for (int y = this->minY; y < this->maxY; y++) {
+			this->map[std::make_pair(x, y)] = Block::EMPTY;
+		}
+	}
 }
 
 Field::~Field() {
@@ -193,8 +209,39 @@ Field::~Field() {
 	}
 }
 
+bool Field::isColliding(Tron* tron) {
+	Coordinate pos = tron->getPosition();
+	return 	(this->map[pos] != Block::EMPTY) || 
+			(pos.first < this->minX) || (pos.first > this->maxX) ||
+			(pos.second < this->minY) || (pos.second > this->maxY);
+}
+
+int Field::getOptimalWalls() {
+	// Best is around 5% of field area.
+	return std::round((this->maxX - this->minX) * (this->maxY - this->minY) * 0.05);
+}
+
+void Field::updateMap() {
+	for (auto const& coordinate : this->map) {
+		this->map[coordinate.first] = Block::EMPTY;
+	}
+	
+	for (auto tron : this->trons) {
+		Coordinate pos = tron->getPosition();
+		this->map[pos] = Block::TRON; 
+		
+		for (auto wallPos : tron->walls) {
+			this->map[wallPos] = Block::WALL;
+		}
+	}
+}
+
 void Field::move() {
 	for (auto tron : this->trons) {
+		if (!tron->isAlive()) {
+			continue;
+		}
+		
 		if (!tron->isHuman()) {
 			tron->think(this);
 		}
@@ -217,12 +264,33 @@ void Field::move() {
 
 		tron->move();
 	}
+	
+	// Did anyone get wrecked?
+	for (auto tron : this->trons) {
+		if (!tron->isAlive()) {
+			continue;
+		}
+		
+		if (this->isColliding(tron)) {
+			tron->kill();
+		}
+	}
+	
+	// Update field map.
+	this->updateMap();
 }
 
 void Field::render() {
 	for (int i = 0; i < this->trons.size(); i++) {
-		// Get the tron and position.
+		// Get the tron.
 		Tron* tron = this->trons[i];
+		
+		// Is alive?
+		if (!tron->isAlive()) {
+			continue;
+		} 
+		
+		// Get tron position.
 		Coordinate pos = tron->getPosition();
 		
 		// Set the color.
@@ -339,17 +407,16 @@ int main(int argc, char *argv[]) {
 	
 	// Create field.
 	Field field(0, 0, cols - 1, rows - 1);
+	int numWalls= field.getOptimalWalls();
 	
 	// Create all trons and add them to the field.
-	Tron* player = new Tron(COLOR_CYAN, true, 20);
+	Tron* player = new Tron(COLOR_CYAN, true, numWalls);
 	field.addTron(player);
 	
-	/*
 	for (int i = 0; i < numAI; i++) {
-		Tron* ai = new Tron(COLOR_YELLOW, false);
+		Tron* ai = new Tron(COLOR_YELLOW, false, numWalls);
 		field.addTron(ai);
 	}
-	*/
 	
 	// Setup the field.
 	field.setupField();
