@@ -58,7 +58,7 @@ bool Timer::isStarted() {
 
 class Tron {
 	public:
-		Tron(int color, bool human);
+		Tron(int color, bool human, int maxWalls);
 		
 		void setPosition(int x, int y);
 		Coordinate getPosition();
@@ -75,10 +75,11 @@ class Tron {
 		bool isAlive();
 		void kill();
 		
-		std::set<Coordinate> walls;
+		std::vector<Coordinate> walls;
 	private:
 		int color;
 		bool human;
+		int maxWalls;
 		
 		int posX;
 		int posY;
@@ -86,9 +87,10 @@ class Tron {
 		bool alive;
 };
 
-Tron::Tron(int color, bool human) {
+Tron::Tron(int color, bool human, int maxWalls) {
 	this->color = color;
 	this->human = human;
+	this->maxWalls = maxWalls;
 	this->alive = true;
 }
 
@@ -123,7 +125,12 @@ void Tron::setDirection(Direction direction) {
 
 void Tron::move() {
 	Coordinate pos = this->getPosition();
-	this->walls.insert(pos);
+	
+	if (this->walls.size() > this->maxWalls) {
+		this->walls.erase(this->walls.begin());
+	}
+	
+	this->walls.push_back(pos);
 	
 	switch(this->direction) {
 	case Direction::LEFT:
@@ -334,7 +341,7 @@ int main(int argc, char *argv[]) {
 	Field field(0, 0, cols - 1, rows - 1);
 	
 	// Create all trons and add them to the field.
-	Tron* player = new Tron(COLOR_CYAN, true);
+	Tron* player = new Tron(COLOR_CYAN, true, 20);
 	field.addTron(player);
 	
 	/*
