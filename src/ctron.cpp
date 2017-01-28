@@ -9,11 +9,11 @@
 #include <random>
 #include <iterator>
 #include <map>
+#include <algorithm>
 
 #define VEL 10.0000
 
 typedef std::pair<int, int> Coordinate;
-class Field;
 
 
 enum Direction {
@@ -73,7 +73,7 @@ class Tron {
 		Direction getDirection();
 		
 		void move();
-		void think(Field* field);
+		void think(std::map<Coordinate, Block>& map);
 		
 		int getColor();
 		bool isHuman();
@@ -91,6 +91,8 @@ class Tron {
 		int posY;
 		Direction direction;
 		bool alive;
+		
+		Block getBlockAhead(std::map<Coordinate, Block>& map, Direction direction, int steps);
 };
 
 Tron::Tron(int color, bool human, int maxWalls) {
@@ -104,8 +106,70 @@ Direction Tron::getDirection() {
 	return this->direction;
 }
 
-void Tron::think(Field* field) {
+Block Tron::getBlockAhead(std::map<Coordinate, Block>& map, Direction direction, int steps) {
+	Coordinate pos = this->getPosition();
 	
+	switch (direction) {
+	case Direction::UP:
+		pos.second -= steps;
+		break;
+	case Direction::DOWN:
+		pos.second += steps;
+		break;
+	case Direction::LEFT:
+		pos.first -= steps;
+		break;
+	case Direction::RIGHT:
+		pos.first += steps;
+		break;
+	}
+	
+	return map[pos];
+}
+
+void Tron::think(std::map<Coordinate, Block>& map) {
+	std::vector<double> grades = {0, 0, 0, 0};
+	
+	// Remove reverse direction.
+	switch (this->direction) {
+	case Direction::LEFT:
+		grades[1] -= 50.0;
+		break;
+	case Direction::RIGHT:
+		grades[0] -= 50.0;
+		break;
+	case Direction::UP:
+		grades[3] -= 50.0;
+		break;
+	case Direction::DOWN:
+		grades[2] -= 50.0;
+		break;
+	}
+	
+	// Look ahead.
+	for (int i = 0; i < 4; i++) {
+		Direction direction = static_cast<Direction>(i);
+		Block block1 = this->getBlockAhead(map, direction, 1);
+		Block block2 = this->getBlockAhead(map, direction, 2);
+		
+		if (block1 == Block::WALL || block1 == Block::TRON || block2 == Block::TRON) {
+			grades[i] -= 50.0;
+		}
+	}
+	
+	// Get max.
+	int maxIndex = 0;
+	double maxValue = grades[0];
+	
+	for (int i = 1; i < 4; i ++) {
+		if (grades[i] > maxValue) {
+			maxIndex = i;
+			maxValue = grades[i];
+		}
+	}
+	
+	Direction optimal = static_cast<Direction>(maxIndex);
+	this->setDirection(optimal);
 }
 
 bool Tron::isHuman() {
@@ -213,9 +277,7 @@ bool Field::isColliding(Tron* tron) {
 		}
 	}
 	
-	return 	(this->map[pos] == Block::WALL) || (tronsInPos > 1) || 
-			(pos.first < this->minX) || (pos.first > this->maxX) ||
-			(pos.second < this->minY) || (pos.second > this->maxY);
+	return 	(this->map[pos] == Block::WALL) || (tronsInPos > 1);
 }
 
 int Field::getOptimalWalls() {
@@ -228,6 +290,16 @@ void Field::updateMap() {
 		for (int y = this->minY; y <= this->maxY; y++) {
 			this->map[std::make_pair(x, y)] = Block::EMPTY;
 		}
+	}
+	
+	for (int y = this->minY - 1; y <= this->maxY + 1; y++) {
+		this->map[std::make_pair(this->minX - 1, y)] = Block::WALL;
+		this->map[std::make_pair(this->maxX + 1, y)] = Block::WALL;
+	}
+	
+	for (int x = this->minX - 1; x <= this->maxX + 1; x++) {
+		this->map[std::make_pair(x, this->minY - 1)] = Block::WALL;
+		this->map[std::make_pair(x, this->maxY + 1)] = Block::WALL;
 	}
 	
 	for (auto tron : this->trons) {
@@ -254,7 +326,7 @@ void Field::move() {
 		
 		if (!tron->isHuman()) {
 			// Think!
-			tron->think(this);
+			tron->think(this->map);
 		}
 		else {
 			// Get user input.
@@ -462,13 +534,20 @@ int main(int argc, char *argv[]) {
 		field.render();
 		refresh();
 		
+		// All dead? Exit.
+		if (field.getNumAlive() == 0) {
+			break;
+		}
+		
 		// Sleep to maintain velocity.
 		int remaining = std::round((1 / VEL) * 1000 - timer.split());
 		
 		if (remaining > 0) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(remaining));
-		}	
+		}
 	}
+	
+	endwin();
 	
 	return 0;
 }
